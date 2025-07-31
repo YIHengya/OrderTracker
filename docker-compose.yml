@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: ordertracker_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root123456
+      MYSQL_DATABASE: ordertracker
+      MYSQL_USER: ordertracker
+      MYSQL_PASSWORD: ordertracker123
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./database/init-data.sql:/docker-entrypoint-initdb.d/02-init-data.sql
+    command: --default-authentication-plugin=mysql_native_password
+    networks:
+      - ordertracker_network
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: ordertracker_phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_USER: ordertracker
+      PMA_PASSWORD: ordertracker123
+    ports:
+      - "8080:80"
+    depends_on:
+      - mysql
+    networks:
+      - ordertracker_network
+
+volumes:
+  mysql_data:
+
+networks:
+  ordertracker_network:
+    driver: bridge
