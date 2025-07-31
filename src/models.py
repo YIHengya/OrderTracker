@@ -9,10 +9,10 @@ from datetime import datetime
 from enum import Enum
 
 # 下单状态枚举
-class OrderStatusEnum(str, Enum):
-    PROCESSING = "进行中"
-    COMPLETED = "完成"
-    FAILED = "失败"
+class OrderStatusEnum(int, Enum):
+    PROCESSING = 1  # 进行中
+    COMPLETED = 2   # 完成
+    FAILED = 3      # 失败
 
 # 商品请求模型
 class ProductRequest(BaseModel):
@@ -104,7 +104,7 @@ class UpdateOrderInfoRequest(BaseModel):
                 "receiver_name": "王毅恒",
                 "receiver_address": "北京 北京市 通州区 市 旭辉御锦4号楼3单元502室 北京市",
                 "receiver_phone": "17858286773",
-                "order_status": "完成"
+                "order_status": 2
             }
         }
 

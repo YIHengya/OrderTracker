@@ -8,11 +8,11 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List
 import uvicorn
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from contextlib import asynccontextmanager
 
 # 导入自定义模块
-from src.database import get_db, OrderTask, OrderStatus, create_tables
+from src.database import get_db, OrderTask, create_tables
 from src.models import (
     ProductRequest, ProductResponse, OrderTaskDetail,
     OrderTaskListResponse, UpdateOrderStatusRequest, UpdateOrderInfoRequest,
@@ -59,8 +59,9 @@ async def create_product(product: ProductRequest, db: Session = Depends(get_db))
     """
     try:
         # 检查用户名和店铺名的组合在24小时内是否已经下过单
-        # 计算24小时前的时间点
-        twenty_four_hours_ago = datetime.now() - timedelta(hours=24)
+        # 计算24小时前的时间点（使用UTC时间确保与数据库时间一致）
+        now_utc = datetime.now(timezone.utc)
+        twenty_four_hours_ago = now_utc - timedelta(hours=24)
 
         # 查询该用户在该店铺最近24小时内的下单记录
         recent_task = db.query(OrderTask).filter(
@@ -71,18 +72,28 @@ async def create_product(product: ProductRequest, db: Session = Depends(get_db))
 
         if recent_task:
             # 计算距离可以重新下单还需要多长时间
-            time_since_last_order = datetime.now() - recent_task.created_at
+            # 确保时间计算的一致性，将数据库时间转换为UTC进行比较
+            if recent_task.created_at.tzinfo is None:
+                # 如果数据库时间是naive datetime，假设它是UTC时间
+                recent_task_utc = recent_task.created_at.replace(tzinfo=timezone.utc)
+            else:
+                recent_task_utc = recent_task.created_at.astimezone(timezone.utc)
+
+            time_since_last_order = now_utc - recent_task_utc
             remaining_time = timedelta(hours=24) - time_since_last_order
             remaining_hours = int(remaining_time.total_seconds() // 3600)
             remaining_minutes = int((remaining_time.total_seconds() % 3600) // 60)
 
             print(f"❌ 用户 '{product.user_name}' 在店铺 '{product.shop_name}' 24小时内已有下单任务")
-            print(f"   最近下单时间: {recent_task.created_at}")
+            # 显示本地时间给用户看
+            local_time = recent_task_utc.astimezone()
+            print(f"   最近下单时间: {local_time.strftime('%Y-%m-%d %H:%M:%S')} (本地时间)")
             print(f"   还需等待: {remaining_hours}小时{remaining_minutes}分钟")
 
             return ProductResponse(
                 success=False,
-                message=f"用户 '{product.user_name}' 在店铺 '{product.shop_name}' 24小时内已有下单任务，还需等待 {remaining_hours}小时{remaining_minutes}分钟后才能重新下单"
+                message=f"用户 '{product.user_name}' 在店铺 '{product.shop_name}' 24小时内已有下单任务，还需等待 {remaining_hours}小时{remaining_minutes}分钟后才能重新下单",
+                task_uuid=recent_task.task_uuid  # 返回最新订单的UUID
             )
 
         # 创建新的下单任务
@@ -92,7 +103,7 @@ async def create_product(product: ProductRequest, db: Session = Depends(get_db))
             product_url=str(product.product_url),
             product_price=product.product_price,
             product_sku=product.product_sku,
-            order_status=OrderStatus.PROCESSING
+            order_status=1  # 进行中
         )
 
         # 保存到数据库
@@ -166,13 +177,13 @@ async def update_order_info(order_info: UpdateOrderInfoRequest, db: Session = De
         # 智能判断订单状态
         if order_info.order_status is not None:
             # 用户明确指定了状态
-            if order_info.order_status == "完成":
-                task.order_status = OrderStatus.COMPLETED
+            if order_info.order_status == 2:  # 完成
+                task.order_status = 2
                 task.completed_at = func.now()
-            elif order_info.order_status == "失败":
-                task.order_status = OrderStatus.FAILED
-            elif order_info.order_status == "进行中":
-                task.order_status = OrderStatus.PROCESSING
+            elif order_info.order_status == 3:  # 失败
+                task.order_status = 3
+            elif order_info.order_status == 1:  # 进行中
+                task.order_status = 1
             updated_fields.append(f"订单状态: {order_info.order_status}")
         else:
             # 用户没有指定状态，根据提供的信息智能判断
@@ -180,9 +191,9 @@ async def update_order_info(order_info: UpdateOrderInfoRequest, db: Session = De
                 order_info.alipay_trade_no is not None and
                 order_info.receiver_name is not None):
                 # 如果提供了订单号、支付宝交易号和收货人信息，自动设置为完成
-                task.order_status = OrderStatus.COMPLETED
+                task.order_status = 2  # 完成
                 task.completed_at = func.now()
-                updated_fields.append("订单状态: 完成 (自动设置)")
+                updated_fields.append("订单状态: 2 (完成-自动设置)")
 
         if order_info.error_message is not None:
             task.error_message = order_info.error_message

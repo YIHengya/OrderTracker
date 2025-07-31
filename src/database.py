@@ -11,6 +11,7 @@ import enum
 from typing import Optional
 import os
 import uuid
+from datetime import timezone
 
 # 数据库配置
 DATABASE_URL = os.getenv(
@@ -34,9 +35,9 @@ Base = declarative_base()
 
 # 定义下单状态枚举
 class OrderStatus(enum.Enum):
-    PROCESSING = "进行中"
-    COMPLETED = "完成"
-    FAILED = "失败"
+    PROCESSING = 1  # 进行中
+    COMPLETED = 2   # 完成
+    FAILED = 3      # 失败
 
 # 商品下单任务模型
 class OrderTask(Base):
@@ -50,9 +51,9 @@ class OrderTask(Base):
     product_price = Column(DECIMAL(10, 2), nullable=False, comment="商品价格")
     product_sku = Column(String(100), nullable=False, comment="商品SKU")
     order_status = Column(
-        Enum(OrderStatus),
-        default=OrderStatus.PROCESSING,
-        comment="下单进度：进行中、完成、失败"
+        Integer,
+        default=1,  # 1-进行中
+        comment="下单进度：1-进行中、2-完成、3-失败"
     )
     error_message = Column(TEXT, nullable=True, comment="失败原因（当状态为失败时）")
     order_id = Column(String(100), nullable=True, comment="订单号（当状态为完成时）")
@@ -60,14 +61,14 @@ class OrderTask(Base):
     receiver_name = Column(String(100), nullable=True, comment="收货人姓名")
     receiver_address = Column(String(500), nullable=True, comment="收货地址")
     receiver_phone = Column(String(20), nullable=True, comment="收货人手机号")
-    created_at = Column(TIMESTAMP, server_default=func.now(), comment="创建时间")
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), comment="创建时间")
     updated_at = Column(
-        TIMESTAMP,
+        TIMESTAMP(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
         comment="更新时间"
     )
-    completed_at = Column(TIMESTAMP, nullable=True, comment="完成时间")
+    completed_at = Column(TIMESTAMP(timezone=True), nullable=True, comment="完成时间")
 
     def __init__(self, **kwargs):
         """初始化时自动生成UUID"""
