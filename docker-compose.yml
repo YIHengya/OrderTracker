@@ -20,6 +20,22 @@ services:
     networks:
       - ordertracker_network
 
+  app:
+    build: .
+    container_name: ordertracker_app
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: mysql+pymysql://ordertracker:ordertracker123@mysql:3306/ordertracker
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mysql
+    networks:
+      - ordertracker_network
+    volumes:
+      - .:/app
+    command: ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
   phpmyadmin:
     image: phpmyadmin/phpmyadmin
     container_name: ordertracker_phpmyadmin

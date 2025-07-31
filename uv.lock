@@ -177,6 +177,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "alembic" },
     { name = "fastapi" },
+    { name = "pydantic" },
     { name = "pymysql" },
     { name = "sqlalchemy" },
     { name = "uvicorn", extra = ["standard"] },
@@ -186,6 +187,7 @@ dependencies = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.16.4" },
     { name = "fastapi", specifier = ">=0.116.1" },
+    { name = "pydantic", specifier = ">=2.11.7" },
     { name = "pymysql", specifier = ">=1.1.1" },
     { name = "sqlalchemy", specifier = ">=2.0.42" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.35.0" },
