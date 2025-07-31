@@ -54,8 +54,19 @@ async def create_product(product: ProductRequest, db: Session = Depends(get_db))
     创建商品下单任务
 
     接收商品信息并创建下单任务
+    如果店铺名已经存在，则返回失败
     """
     try:
+        # 检查店铺名是否已经存在
+        existing_shop = db.query(OrderTask).filter(OrderTask.shop_name == product.shop_name).first()
+
+        if existing_shop:
+            print(f"❌ 店铺名已存在: {product.shop_name}")
+            return ProductResponse(
+                success=False,
+                message=f"店铺名 '{product.shop_name}' 已经存在，无法重复下单"
+            )
+
         # 创建新的下单任务
         new_task = OrderTask(
             user_name=product.user_name,
