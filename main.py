@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List
 import uvicorn
-from datetime import datetime
+from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
 
 # 导入自定义模块
@@ -54,17 +54,35 @@ async def create_product(product: ProductRequest, db: Session = Depends(get_db))
     创建商品下单任务
 
     接收商品信息并创建下单任务
-    如果店铺名已经存在，则返回失败
+    如果同一用户在同一店铺已有下单任务，则返回失败
+    不同用户可以在同一店铺下单
     """
     try:
-        # 检查店铺名是否已经存在
-        existing_shop = db.query(OrderTask).filter(OrderTask.shop_name == product.shop_name).first()
+        # 检查用户名和店铺名的组合在24小时内是否已经下过单
+        # 计算24小时前的时间点
+        twenty_four_hours_ago = datetime.now() - timedelta(hours=24)
 
-        if existing_shop:
-            print(f"❌ 店铺名已存在: {product.shop_name}")
+        # 查询该用户在该店铺最近24小时内的下单记录
+        recent_task = db.query(OrderTask).filter(
+            OrderTask.user_name == product.user_name,
+            OrderTask.shop_name == product.shop_name,
+            OrderTask.created_at > twenty_four_hours_ago
+        ).order_by(OrderTask.created_at.desc()).first()
+
+        if recent_task:
+            # 计算距离可以重新下单还需要多长时间
+            time_since_last_order = datetime.now() - recent_task.created_at
+            remaining_time = timedelta(hours=24) - time_since_last_order
+            remaining_hours = int(remaining_time.total_seconds() // 3600)
+            remaining_minutes = int((remaining_time.total_seconds() % 3600) // 60)
+
+            print(f"❌ 用户 '{product.user_name}' 在店铺 '{product.shop_name}' 24小时内已有下单任务")
+            print(f"   最近下单时间: {recent_task.created_at}")
+            print(f"   还需等待: {remaining_hours}小时{remaining_minutes}分钟")
+
             return ProductResponse(
                 success=False,
-                message=f"店铺名 '{product.shop_name}' 已经存在，无法重复下单"
+                message=f"用户 '{product.user_name}' 在店铺 '{product.shop_name}' 24小时内已有下单任务，还需等待 {remaining_hours}小时{remaining_minutes}分钟后才能重新下单"
             )
 
         # 创建新的下单任务
