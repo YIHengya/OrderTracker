@@ -3,7 +3,7 @@
 OrderTracker FastAPI应用
 """
 
-from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List
@@ -15,8 +15,7 @@ from contextlib import asynccontextmanager
 from src.database import get_db, OrderTask, create_tables
 from src.models import (
     ProductRequest, ProductResponse, OrderTaskDetail,
-    OrderTaskListResponse, UpdateOrderStatusRequest, UpdateOrderInfoRequest,
-    OrderTaskStats, OrderTaskStatsResponse, OrderStatusEnum
+    UpdateOrderInfoRequest, CurrentTaskResponse
 )
 
 # 应用生命周期管理
@@ -48,10 +47,10 @@ async def health_check():
     """健康检查接口"""
     return {"status": "healthy", "service": "OrderTracker"}
 
-@app.post("/product", response_model=ProductResponse)
-async def create_product(product: ProductRequest, db: Session = Depends(get_db)):
+@app.post("/orders", response_model=ProductResponse)
+async def create_order_task(product: ProductRequest, db: Session = Depends(get_db)):
     """
-    创建商品下单任务
+    创建订单任务
 
     接收商品信息并创建下单任务
     如果同一用户在同一店铺已有下单任务，则返回失败
@@ -133,22 +132,22 @@ async def create_product(product: ProductRequest, db: Session = Depends(get_db))
         return ProductResponse(success=False, message=f"创建任务失败: {str(e)}")
 
 
-@app.put("/order/update", response_model=ProductResponse)
-async def update_order_info(order_info: UpdateOrderInfoRequest, db: Session = Depends(get_db)):
+@app.patch("/orders/{task_uuid}", response_model=ProductResponse)
+async def update_order_info(task_uuid: str, order_info: UpdateOrderInfoRequest, db: Session = Depends(get_db)):
     """
     更新订单信息
 
-    根据task_uuid查询并更新订单的详细信息，包括订单号、支付宝交易号、收货信息等
+    根据task_uuid更新订单的详细信息，包括订单号、支付宝交易号、收货信息等
     """
     try:
         # 根据task_uuid查询任务
-        task = db.query(OrderTask).filter(OrderTask.task_uuid == order_info.task_uuid).first()
+        task = db.query(OrderTask).filter(OrderTask.task_uuid == task_uuid).first()
 
         if not task:
-            print(f"❌ 未找到任务: {order_info.task_uuid}")
+            print(f"❌ 未找到任务: {task_uuid}")
             return ProductResponse(
                 success=False,
-                message=f"未找到任务UUID: {order_info.task_uuid}"
+                message=f"未找到任务UUID: {task_uuid}"
             )
 
         # 更新字段（只更新提供的非空字段）
@@ -219,6 +218,56 @@ async def update_order_info(order_info: UpdateOrderInfoRequest, db: Session = De
         db.rollback()
         print(f"❌ 更新订单信息失败: {str(e)}")
         return ProductResponse(success=False, message=f"更新订单信息失败: {str(e)}")
+
+
+@app.get("/users/{user_name}/orders/current", response_model=CurrentTaskResponse)
+async def get_user_current_order(user_name: str, db: Session = Depends(get_db)):
+    """
+    获取用户当前进行中的订单
+
+    根据用户名查询当前状态为"进行中"(order_status=1)的订单
+    返回订单的完整信息，包括任务ID、UUID、店铺名称、商品链接、价格、SKU等
+    """
+    try:
+        # 查询该用户当前进行中的任务（按创建时间倒序，取最新的一条）
+        current_task = db.query(OrderTask).filter(
+            OrderTask.user_name == user_name,
+            OrderTask.order_status == 1  # 1 = 进行中
+        ).order_by(OrderTask.created_at.desc()).first()
+
+        if not current_task:
+            print(f"❌ 用户 '{user_name}' 当前没有进行中的任务")
+            return CurrentTaskResponse(
+                success=False,
+                message=f"用户 '{user_name}' 当前没有进行中的任务",
+                task=None
+            )
+
+        # 转换为响应模型
+        task_detail = OrderTaskDetail.model_validate(current_task)
+
+        print(f"✅ 获取用户当前任务成功:")
+        print(f"  用户名: {current_task.user_name}")
+        print(f"  任务ID: {current_task.id}")
+        print(f"  任务UUID: {current_task.task_uuid}")
+        print(f"  店铺名称: {current_task.shop_name}")
+        print(f"  商品链接: {current_task.product_url}")
+        print(f"  商品价格: {current_task.product_price}")
+        print(f"  商品SKU: {current_task.product_sku}")
+
+        return CurrentTaskResponse(
+            success=True,
+            message=f"成功获取用户 '{user_name}' 的当前进行中任务",
+            task=task_detail
+        )
+
+    except Exception as e:
+        print(f"❌ 获取用户当前任务失败: {str(e)}")
+        return CurrentTaskResponse(
+            success=False,
+            message=f"获取用户当前任务失败: {str(e)}",
+            task=None
+        )
 
 
 if __name__ == "__main__":

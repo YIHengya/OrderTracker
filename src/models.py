@@ -86,7 +86,6 @@ class UpdateOrderStatusRequest(BaseModel):
 
 # 更新订单信息请求模型
 class UpdateOrderInfoRequest(BaseModel):
-    task_uuid: str = Field(..., description="任务UUID")
     order_id: Optional[str] = Field(None, description="订单号")
     alipay_trade_no: Optional[str] = Field(None, description="支付宝交易号")
     receiver_name: Optional[str] = Field(None, max_length=100, description="收货人姓名")
@@ -98,7 +97,6 @@ class UpdateOrderInfoRequest(BaseModel):
     class Config:
         schema_extra = {
             "example": {
-                "task_uuid": "550e8400-e29b-41d4-a716-446655440001",
                 "order_id": "2856526176708641363",
                 "alipay_trade_no": "2025073122001895161402512358",
                 "receiver_name": "王毅恒",
@@ -120,3 +118,9 @@ class OrderTaskStatsResponse(BaseModel):
     success: bool
     message: Optional[str] = None
     stats: OrderTaskStats
+
+# 获取用户当前进行中任务的响应模型
+class CurrentTaskResponse(BaseModel):
+    success: bool
+    message: Optional[str] = None
+    task: Optional[OrderTaskDetail] = None
