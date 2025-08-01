@@ -21,7 +21,7 @@ services:
       - ordertracker_network
 
   app:
-    build: .
+    image: daiguacc/ordertracker:latest
     container_name: ordertracker_app
     restart: unless-stopped
     environment:
@@ -32,9 +32,6 @@ services:
       - mysql
     networks:
       - ordertracker_network
-    volumes:
-      - .:/app
-    command: ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
   phpmyadmin:
     image: phpmyadmin/phpmyadmin
